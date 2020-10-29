@@ -2,40 +2,40 @@ import cv2
 import numpy as np
 from scipy import ndimage
 from scipy.ndimage.filters import convolve
-from matplotlib import pyplot
+from matplotlib import pyplot as plt
 from matplotlib import image
 from PIL import Image
 
-img = Image.open("Resources/4.jpg").convert("L")
-img_Gray = np.asarray(img, dtype="int32")
+img = Image.open("Resources/monety2.jpg").convert("L")
+img_Gray = np.asarray(img, dtype=np.uint8)
 imgGray = img_Gray.astype(np.uint8)
 cv2.imshow("Grayscale IMG", imgGray)
 
-# Gaussian Blur 5x5 kernel
-def gaussian_kernel(size, sigma = 1):
+# Gaussian Blur - kernel
+def gaussian_kernel(size, sigma):
     size = int(size) // 2
     x, y = np.mgrid[-size:size+1, -size:size+1]
     normal = 1 / (2.0 * np.pi * sigma**2)
-    g = np.exp(-((x**2 + y**2) / (2.0*sigma**2))) * normal
-    return g
+    mask = np.exp(-((x**2 + y**2) / (2.0*sigma**2))) * normal
+    return mask
 
-def sobel_filter(img):
-    Kx = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], np.float32)
-    Ky = np.array([[1, 2, 1], [0, 0, 0], [-1, -2, -1]], np.float32)
+# Finding the intensity gradient of the image
+def prewitt_operator(img):
+    Gxx = np.array([[1, 0, -1], [1, 0, -1], [1, 0, -1]])
+    Gyy = np.array([[1, 1, 1], [0, 0, 0], [-1, -1, -1]])
 
-    Ix = ndimage.filters.convolve(img, Kx)
-    Iy = ndimage.filters.convolve(img, Ky)
+    Gx = ndimage.filters.convolve(img, Gxx)
+    Gy = ndimage.filters.convolve(img, Gyy)
 
-    I = np.hypot(Ix, Iy)
-    #I = np.sqrt(np.square(Ix) + np.square(Iy))
-    I = I / I.max() * 255
-    theta = np.arctan2(Iy, Ix)
+    G = np.sqrt(np.square(Gx) + np.square(Gy))
+    G = G / G.max() * 255
+    theta = np.arctan2(Gy, Gx)
 
-    return (I, theta)
+    return (G, theta)
 
-def no_max_suppression(img, D):
+def non_max_suppression(img, D):
     M, N = img.shape
-    Z = np.zeros((M, N), dtype=np.int32)
+    I = np.zeros((M, N), dtype=np.uint8)
     angle = D * 180. / np.pi
     angle[angle < 0] += 180
 
@@ -63,34 +63,32 @@ def no_max_suppression(img, D):
                     r = img[i+1, j+1]
 
                 if (img[i, j] >= q) and (img[i, j] >= r):
-                    Z[i,j ] = img[i, j]
+                    I[i,j ] = img[i, j]
                 else:
-                    Z[i, j] = 0
+                    I[i, j] = 0
 
             except IndexError as e:
                 pass
-    return Z
+    return I
 
 
-def threshold(img, lowThresholdRatio=0.05, highThresholdRatio=0.09):
-    highThreshold = img.max() * highThresholdRatio
-    lowThreshold = highThreshold * lowThresholdRatio
+def double_threshold(img, lowThresholdVal=0.05, highThresholdVal=0.18):
+    highThreshold = img.max() * highThresholdVal
+    lowThreshold = highThreshold * lowThresholdVal
 
     M, N = img.shape
-    res = np.zeros((M, N), dtype=np.int32)
+    result = np.zeros((M, N), dtype=np.uint8)
 
-    weak = np.int32(25)
-    strong = np.int32(255)
+    weak = np.uint8(25)
+    strong = np.uint8(255)
 
     strong_i, strong_j = np.where(img >= highThreshold)
-    zeros_i, zeros_j = np.where(img < lowThreshold)
-
     weak_i, weak_j = np.where((img <= highThreshold) & (img >= lowThreshold))
 
-    res[strong_i, strong_j] = strong
-    res[weak_i, weak_j] = weak
+    result[strong_i, strong_j] = strong
+    result[weak_i, weak_j] = weak
 
-    return (res, weak, strong)
+    return (result, weak, strong)
 
 def hysteresis(img, weak, strong=255):
     M, N = img.shape
@@ -110,35 +108,66 @@ def hysteresis(img, weak, strong=255):
 
     return img
 
+def detectCircles(img, radius):
+    edges = img
+    plt.imshow(img)
+    plt.imshow(edges, cmap='gray')
+    plt.show()
+    rows, columns = edges.shape
+    img2 = edges
+
+    radius += 2
+
+    for x in range(0, columns):
+        for y in range(0, rows):
+            if (edges[y, x] == 255):
+                for ang in range(0, 360):
+                    t = (ang * np.pi) / 180
+                    x0 = int(round(x - radius * np.cos(t)))
+                    y0 = int(round(y - radius * np.sin(t)))
+                    if (x0 < columns and x0 > 0 and y0 < rows and y0 > 0 and img2[y0, x0] < 255):
+                        img2[y0, x0] += 1
+
+    maxes = np.argwhere((img2 > 200) & (img2 < 250)).flatten()
+
+    for i in range(0, len(maxes), 2):
+        cv2.circle(img2, center=(maxes[i + 1], maxes[i]), radius=radius, color=(255, 255, 255), thickness=2)
+
+    plt.imshow(img2, cmap='gray')
+    plt.show()
+
 x, y = imgGray.shape
-result = gaussian_kernel(5, 1.2)
+result = gaussian_kernel(5, 1.5)
 img_gauss = np.zeros((x, y), dtype=np.uint8)
 img_gauss = convolve(imgGray, result)
-cv2.imshow("Blur", img_gauss)
+cv2.imshow("Smoothing image - Gaussian filter", img_gauss)
 cv2.waitKey(0)
 
 img_gauss = np.asarray(img_gauss, dtype=np.int32)
-img_sobel = np.zeros((x, y), dtype=np.int32)
-img_sobel, theta = sobel_filter(img_gauss)
-img_sobel = np.array(img_sobel)
-img_sobel = img_sobel.astype(np.uint8)
-cv2.imshow("Sobel Filter", img_sobel)
+img_prewitt = np.zeros((x, y), dtype=np.int32)
+img_prewitt, theta = prewitt_operator(img_gauss)
+img_prewitt = np.array(img_prewitt)
+img_prewitt = img_prewitt.astype(np.uint8)
+cv2.imshow("Prewitt operator - finding the intensity of the image", img_prewitt)
 cv2.waitKey(0)
 
 img_surp = np.zeros((x, y), dtype=np.uint8)
-img_surp = no_max_suppression(img_sobel, theta)
+img_surp = non_max_suppression(img_prewitt, theta)
 img_surp = np.array(img_surp)
 img_surp = img_surp.astype(np.uint8)
-cv2.imshow("Max Surpression", img_surp)
+cv2.imshow("Non-Maximum Surpression", img_surp)
 cv2.waitKey(0)
 
-img_threshold = np.zeros((x, y), dtype=np.int32)
-img_threshold, weak, strong = threshold(img_surp)
-img_threshold = np.array(img_surp)
-cv2.imshow("Threshold", img_threshold)
+img_threshold = np.zeros((x, y), dtype=np.uint8)
+img_threshold, weak, strong = double_threshold(img_surp)
+img_threshold = np.array(img_threshold)
+img_threshold = img_threshold.astype(np.uint8)
+cv2.imshow("Double Threshold", img_threshold)
 cv2.waitKey(0)
 
 img_edge = np.zeros((x, y), dtype=np.uint8)
-img_edge = hysteresis(img_surp, weak, strong)
-cv2.imshow("Edge tracked", img_edge)
+img_edge = hysteresis(img_threshold, weak, strong)
+cv2.imshow("Edge tracked by hysteresis", img_edge)
 cv2.waitKey(0)
+
+detectCircles(img_edge, 2)
