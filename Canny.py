@@ -6,11 +6,6 @@ from matplotlib import pyplot as plt
 from matplotlib import image
 from PIL import Image
 
-img = Image.open("Resources/monety2.jpg").convert("L")
-img_Gray = np.asarray(img, dtype=np.uint8)
-imgGray = img_Gray.astype(np.uint8)
-cv2.imshow("Grayscale IMG", imgGray)
-
 # Gaussian Blur - kernel
 def gaussian_kernel(size, sigma):
     size = int(size) // 2
@@ -72,7 +67,7 @@ def non_max_suppression(img, D):
     return I
 
 
-def double_threshold(img, lowThresholdVal=0.05, highThresholdVal=0.18):
+def double_threshold(img, lowThresholdVal=0.10, highThresholdVal=0.18):
     highThreshold = img.max() * highThresholdVal
     lowThreshold = highThreshold * lowThresholdVal
 
@@ -108,33 +103,46 @@ def hysteresis(img, weak, strong=255):
 
     return img
 
-def detectCircles(img, radius):
-    edges = img
-    plt.imshow(img)
+def detectCircles(edges, radius, radiusrange = 3):
     plt.imshow(edges, cmap='gray')
     plt.show()
     rows, columns = edges.shape
-    img2 = edges
 
-    radius += 2
+    for rad in range(radius, radius+radiusrange):
+        img2buffer = np.zeros([rows, columns], dtype=np.uint8)
+        for x in range(0, columns):
+            for y in range(0, rows):
+                if (edges[y, x] == 255):
+                    for ang in range(0, 360):
+                        t = (ang * np.pi) / 180
+                        x0 = int(round(x - rad * np.cos(t)))
+                        y0 = int(round(y - rad * np.sin(t)))
+                        if (x0 < columns and x0 > 0 and y0 < rows and y0 > 0 and img2buffer[y0, x0] < 255):
+                            img2buffer[y0, x0] += 1
 
-    for x in range(0, columns):
-        for y in range(0, rows):
-            if (edges[y, x] == 255):
-                for ang in range(0, 360):
-                    t = (ang * np.pi) / 180
-                    x0 = int(round(x - radius * np.cos(t)))
-                    y0 = int(round(y - radius * np.sin(t)))
-                    if (x0 < columns and x0 > 0 and y0 < rows and y0 > 0 and img2[y0, x0] < 255):
-                        img2[y0, x0] += 1
+        maxes = np.argwhere((img2buffer > 100) & (img2buffer < 250)).flatten()
+        plt.imshow(img2buffer, cmap='gray')
+        plt.show()
+        if(len(maxes) == 0):
+            print('no maxes')
+            continue
+        else:
+            print(maxes)
+            plt.imshow(img2buffer, cmap='gray')
+            plt.show()
 
-    maxes = np.argwhere((img2 > 200) & (img2 < 250)).flatten()
+            for i in range(0, len(maxes), 2):
+                cv2.circle(edges, center=(maxes[i + 1], maxes[i]), radius=rad, color=(255, 255, 255), thickness=2)
 
-    for i in range(0, len(maxes), 2):
-        cv2.circle(img2, center=(maxes[i + 1], maxes[i]), radius=radius, color=(255, 255, 255), thickness=2)
+            plt.imshow(edges)
+            plt.show()
+            break
 
-    plt.imshow(img2, cmap='gray')
-    plt.show()
+img = Image.open("monety.png").convert("L")
+img_Gray = np.asarray(img, dtype=np.uint8)
+imgGray = img_Gray.astype(np.uint8)
+cv2.imshow("Grayscale IMG", imgGray)
+
 
 x, y = imgGray.shape
 result = gaussian_kernel(5, 1.5)
@@ -170,4 +178,4 @@ img_edge = hysteresis(img_threshold, weak, strong)
 cv2.imshow("Edge tracked by hysteresis", img_edge)
 cv2.waitKey(0)
 
-detectCircles(img_edge, 2)
+detectCircles(img_edge, 83, 6)

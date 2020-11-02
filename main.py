@@ -14,7 +14,11 @@ def detectCircles(img, radius):
     plt.imshow(edges, cmap='gray')
     plt.show()
     rows, columns = edges.shape
-    img2 = edges
+    img2buffer = np.zeros([rows, columns], dtype=np.uint8)
+
+    plt.imshow(img2buffer, cmap='gray')
+    plt.show()
+
 
     radius += 2
 
@@ -25,21 +29,24 @@ def detectCircles(img, radius):
                     t = (ang * np.pi) / 180
                     x0 = int(round(x - radius * np.cos(t)))
                     y0 = int(round(y - radius * np.sin(t)))
-                    if (x0 < columns and x0 > 0 and y0 < rows and y0 > 0 and img2[y0, x0] < 255):
-                        img2[y0, x0] += 1
+                    if (x0 < columns and x0 > 0 and y0 < rows and y0 > 0 and edges[y0, x0] < 255):
+                        img2buffer[y0, x0] += 1
 
-    maxes = np.argwhere((img2 > 200) & (img2 < 250)).flatten()
+    maxes = np.argwhere((img2buffer > 200) & (img2buffer < 250)).flatten()
+
+    plt.imshow(img2buffer, cmap='gray')
+    plt.show()
 
     for i in range(0, len(maxes), 2):
-        cv2.circle(img2, center=(maxes[i + 1], maxes[i]), radius=radius, color=(255, 255, 255), thickness=2)
+        cv2.circle(edges, center=(maxes[i + 1], maxes[i]), radius=radius, color=(255, 255, 255), thickness=2)
 
-    plt.imshow(img2, cmap='gray')
+    plt.imshow(edges)
     plt.show()
 
 
-img = imageio.imread('120x2O100x2O50x2O20x4.png')
+img = imageio.imread('circle50x50.png')
 
-detectCircles(img, 60)
+detectCircles(img, 23)
 
 
 
